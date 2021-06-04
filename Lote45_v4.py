@@ -9,6 +9,7 @@ from tkinter.filedialog import askopenfilenames
 import pandas as pd
 import sys,clr
 import numpy as np
+from tkinter import messagebox
 
 sys.path.append("C:\Program Files (x86)\Lote45\Lote45 Bridge Client")
 clr.AddReference("zlib.net")
@@ -26,6 +27,7 @@ mkts = ''
 answer = ''
 mktstate = 'normal'
 dfglobal = pd.DataFrame()
+##
 def clienteSelecionado(event):
     nomeCliente = comboClientes.get()
     
@@ -66,26 +68,90 @@ def clienteSelecionado(event):
             comboMkt.grid(column=1, row=1, sticky="E", padx=10)
             comboMkt.bind("<<ComboboxSelected>>", mktSelecionado)
             
-        #print(answer)
     else:
         tk.messagebox.showinfo(title = "Informe", message="Está sendo usado como Market Source: "+str(mkts))
     
     dfAux = pd.DataFrame(arrayAux,columns=['idMktSrc','nomeMktSrc'])
+    #print(dfAux)
     dfMktSrc = dfMktSrc.append(dfAux)
+    #print(dfMktSrc)
     auxMkt = dfMktSrc["nomeMktSrc"]
     auxMkt.drop(index = auxMkt.index[-1],axis=1,inplace=True)    
     auxMktArray = auxMkt.values.tolist()
     comboMkt["values"] = auxMktArray
 
-
+##
 def mktSelecionado(event):
     mkt = comboMkt.get()
     global mkts
     mkts = str(mkt)
     clienteSelecionado(event)
 
+##
+
+def getPrices(produto, date, idMktSource):
+    query = "SELECT "
+    query = query + "	 CASE "
+    query = query + "		WHEN PRD.n0n_Str_Product  = PRD.n0n_Str_ProductNick THEN PRD.n0n_Str_ProductNick "
+    query = query + "		WHEN PRD.f1n_Id_ProductClass IN (52,50,33,704) THEN PRD.n0n_Str_ProductNick "
+    query = query + "		ELSE PRD.n0n_Str_Product "
+    query = query + "	END AS Product, "
+    query = query + "	RESPU.n0n_Vl_PU AS Price, "
+    query = query + "	RESPU.n0n_Vl_TradePU AS TradePU, "
+    query = query + "	RESPUCOMP.n0n_Vl_PU AS PUCompany, "
+    query = query + "	RESPUCOMP.f1n_Id_TradingDesk AS idTradindesk, "
+    query = query + "	CURR.n0n_Str_Currency AS Currency, "
+    query = query + "	CLASS.n0n_Str_ProductClass AS ProductClass, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,RESPU.f2n_Id_MktSource,CURR.p1n_Id_Currency,220) AS MKTSRCPARITY, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,0,CURR.p1n_Id_Currency,220) AS ZEROPARITY, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,RESPU.f2n_Id_MktSource,790,220) AS MKTSRCUSDBRLPARITY, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,RESPU.f2n_Id_MktSource,220,978) AS MKTSRCEURUSDPARITY "
+    query = query + "FROM [LOTIS_RESMASTER].[dbo].[Res_PUProduct] RESPU (NOLOCK) "
+    query = query + "INNER JOIN [LOTIS_RESMASTER].[dbo].[Res_PUCompanyProduct] RESPUCOMP (NOLOCK) "
+    query = query + "	ON RESPU.n0n_Str_Product = RESPUCOMP.n0n_Str_Product "
+    query = query + "	AND RESPU.n0n_Dt_ValDate = RESPUCOMP.n0n_Dt_ValDate "
+    query = query + "	AND  RESPU.f2n_Id_MktSource = RESPUCOMP.f3n_Id_MktSource " 
+    query = query + "INNER JOIN [APM].[dbo].[Prd_Products] PRD (NOLOCK) "
+    query = query + "	ON RESPU.n0n_Str_Product = PRD.n0n_Str_Product "
+    query = query + "	AND (PRD.n0n_Str_Product = '"+produto+"' OR  PRD.n0n_Str_ProductNick ='"+produto+"' ) " 
+    query = query + "INNER JOIN [APM].[dbo].[Prd_ProductClass] CLASS (NOLOCK) "
+    query = query + "	ON CLASS.p1n_Id_ProductClass = PRD.f1n_Id_ProductClass " 
+    query = query + "INNER JOIN [GLOBAL].[dbo].[Glb_Currency] AS CURR (NOLOCK) "
+    query = query + "	ON PRD.f3n_Id_ProductCurrency = CURR.p1n_Id_Currency "
+    query = query + "WHERE RESPU.n0n_Dt_ValDate = '"+date+"' AND RESPU.f2n_Id_MktSource = "+str(idMktSource)
+
+    Precos = np.array([])
+
+    dtPrices = sqlBridgeClient.ResolveQuery(query)
+    #print(dtPrices)
+    i = 0
+    for linha in dtPrices.Rows:
+        preco = linha['Price']
+        Precos = np.insert(Precos, i, preco)
 
 
+    return Precos
+##
+def  addPrice(event):
+    global dfglobal
+    o = len(dfglobal.index)
+    for z in range(0,o):
+        data  = str(dfglobal.iat[z,0])
+        idmkt = str(int(dfglobal.iat[z,5]))
+        prod  = str(dfglobal.iat[z,1])
+        try:
+            prec = getPrices(prod,data,idmkt)
+            dfglobal.iat[z,6] = prec[0]
+        except:
+            dfglobal.iat[z,6] = np.nan
+    
+    geratabela(event)
+
+
+
+
+
+##
 def procurar(event):
     Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
     files = askopenfilenames() # show an "Open" dialog box and return the path to the selected file
@@ -103,7 +169,7 @@ def procurar(event):
         i+=1
         
     arquivo.set(str_Arquivos)
-    
+##   
 def verificaPadrao(dtFrame, name):
     colunas = dtFrame.columns
     num = len(colunas)
@@ -118,7 +184,7 @@ def verificaPadrao(dtFrame, name):
     
     return arquivoCerto
         
-
+##
 def importar(event):
     
     idCliente = comboClientes.get()
@@ -129,6 +195,7 @@ def importar(event):
     global dfglobal
     global dfArquivos
     global mkts
+    global dfMktSrc
     if idCliente == "" :
         tk.messagebox.showwarning('Alerta', 'Favor preencher o Cliente!')
         print("Favor preencher o Cliente!")
@@ -147,43 +214,72 @@ def importar(event):
         for file in files:
             aux = pd.read_excel(file)
             padraoArquivo = verificaPadrao(aux, file)
+
             if padraoArquivo:
-                df = aux[['Data','MktSource','Produto','Preço','Pricing Type']]
+                aux = aux.rename(columns={'MktSource': 'nomeMktSrc'})
+                df = aux[['Data','nomeMktSrc','Produto','Preço','Pricing Type']]
+                print(df)
+                print("======================")
                 if (answer == 'yes'):
-                    df[['MktSource']] = df[['MktSource']].fillna(value=mkts)
+                    df[['nomeMktSrc']] = df[['nomeMktSrc']].fillna(value=mkts)
                 df = df.dropna()
+                print(df)
+                print('================')
                 tipoArquivo = verificaTipo(df)
-                print(tipoArquivo)
                 if tipoArquivo:
-                    dfArquivos = dfArquivos.append(df)
-                    dfglobal = dfArquivos
-                    geratabela(event)
+                    dfArquivos = dfArquivos.append(df)     #Tabela sem preço
                     print(dfArquivos)
-    
-        
+                    dfglobal = pd.merge(dfArquivos,dfMktSrc,on = 'nomeMktSrc',how = 'left') #Tabela que vai ter preço
+                    dfglobal["Preços Procurados"] = np.nan
+                    del dfglobal["MktSource"]
+                    print(dfglobal)
+                    #print(dfglobal)
+                    addPrice(event)
+
+
+##        
 def geratabela(event):
     global dfglobal
     global wrapperResult
-    #df2 = pd.DataFrame(np.array([[1, 2, 3,4], [4, 5, 6,7], [7, 8, 9,10], [10,11,12,13]]),columns=['a', 'b', 'c','d'])
+    global l
+    print("=================Inter")
     df2 = dfglobal
+    #print(dfglobal.iat[0,6])
+    #print(dfglobal.iat[0,2])
     df2_col = df2.values.tolist()
-    trv = ttk.Treeview(wrapperResult, columns =(1,2,3,4,5), show="headings",height="6")
+    trv = ttk.Treeview(wrapperResult, columns =(1,2,3,4,5,6,7), show="headings",height="6")
     trv.pack()
     trv.heading(1, text="Data")
     trv.column(1,anchor ="center")
-    trv.heading(2, text="MktSource")
-    trv.column(2,anchor ="center")
-    trv.heading(3, text="Produto")
-    trv.column(3,anchor ="center")
-    trv.heading(4, text="Preço")
-    trv.column(4,anchor ="center")
-    trv.heading(5, text="Pricing Type")
-    trv.column(5,anchor ="center")
+    trv.heading(2, text="Produto")
+    trv.column(2,anchor ="center",minwidth = 60)
+    trv.heading(3, text="Preço")
+    trv.column(3,anchor ="center",minwidth = 50)
+    trv.heading(4, text="Pricing Type")
+    trv.column(4,anchor ="center",minwidth = 100)
+    trv.heading(5, text="nomeMktSrc")
+    trv.column(5,anchor ="center",minwidth = 150)
+    trv.heading(6, text="idMktSrc")
+    trv.column(6,anchor ="center",minwidth = 60)
+    trv.heading(7, text="Preços Procurados")
+    trv.column(7,anchor ="center",minwidth = 100,width = 100)
+    
+    trv.tag_configure('bgg', background='#aafa84')
+    trv.tag_configure('bgr', background='#fa8e7d')
 
+    
     for dados in df2_col:
-        trv.insert('',tk.END,values=dados)
-
-
+        print(dados[2])
+        print(dados[6])
+        if (dados[2]==dados[6]):
+            trv.insert('',tk.END,values=dados,tags=('bgg'))
+        else:
+            trv.insert('',tk.END,values=dados,tags=('bgr'))
+    #trv.insert('', 'end', text='Item 4',values= "Teste", tags=('fg', 'bg'))
+    #trv.tag_configure(tagname, background=str)
+##
+l = locals()
+##
 
 def verificaTipo(dataf): ##Message Box##
     c = len(dataf.index)
@@ -212,7 +308,7 @@ def verificaTipo(dataf): ##Message Box##
                     arquivoCerto = False
                     print("Existe um dado errado na coluna de Pricing Type,Linha:"+str(j))
     return arquivoCerto
-
+##
 def getClientes():
     global dfClientes
     queryClientes = 'SELECT p1n_Id_Client AS ID, n0n_Str_ClientName AS Name FROM GLOBAL..Glb_Clients (NOLOCK) WHERE n0y_Dt_End IS NULL ORDER BY n0n_Str_ClientName'
@@ -253,6 +349,7 @@ dfClientes = pd.DataFrame(columns=['idCliente','nomeCliente'])
 dfMktSrc = pd.DataFrame(columns=['idMktSrc','nomeMktSrc'])
 
 
+
 clientes = getClientes()
 clientesArray = clientes.values.tolist()
 arquivo = StringVar()
@@ -269,12 +366,12 @@ comboClientes.bind("<<ComboboxSelected>>", clienteSelecionado)
 
 Label_Mkt = Label(wrapper,width=20, text="Selecione o Market Source:", pady = 10, padx = 10)
 Label_Mkt.grid(row = 1, sticky="W")
-#print(mktstate)
+
 comboMkt = ''
 comboMkt = ttk.Combobox(wrapper, width=40,state = mktstate) 
 comboMkt.grid(column=1, row=1, sticky="E", padx=10)
 comboMkt.bind("<<ComboboxSelected>>", mktSelecionado)
-#print(comboMkt)
+
 
 labelArq = Label(wrapper, width=20, text="Selecione o arquivo:", pady = 10, padx = 10)
 labelArq.grid(row = 2, column = 0, sticky="W")
@@ -297,30 +394,6 @@ wrapperprocess.pack(fill="both", expand = "yes" , padx=10,pady=10)
 
 
 ##!
-#df2 = pd.DataFrame(np.array([[1, 2, 3,4], [4, 5, 6,7], [7, 8, 9,10], [10,11,12,13]]),columns=['a', 'b', 'c','d'])
-#df2_col = df2.values.tolist()
-#print(df2_col)
-##print(df2)
-#
-#
-#wrappertabela = LabelFrame(janela, text = "Tabela")
-#wrappertabela.pack(fill="both", expand = "yes" , padx=10,pady=10)
-#
-#trv = ttk.Treeview(wrappertabela, columns =(1,2,3,4,5), show="headings",height="6")
-#trv.pack()
-#trv.heading(1, text="Data")
-#trv.column(1,anchor ="center")
-#trv.heading(2, text="MktSource")
-#trv.column(2,anchor ="center")
-#trv.heading(3, text="Produto")
-#trv.column(3,anchor ="center")
-#trv.heading(4, text="Preço")
-#trv.column(4,anchor ="center")
-#trv.heading(5, text="Pricing Type")
-#trv.column(5,anchor ="center")
-#
-#for dados in df2_col:
-#    trv.insert('',tk.END,values=dados)
 
 ##!
 
