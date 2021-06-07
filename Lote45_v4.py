@@ -11,6 +11,8 @@ import sys,clr
 import numpy as np
 from tkinter import messagebox
 
+from pandas.core import frame
+
 sys.path.append("C:\Program Files (x86)\Lote45\Lote45 Bridge Client")
 clr.AddReference("zlib.net")
 clr.AddReference("SocketClient")
@@ -90,6 +92,9 @@ def mktSelecionado(event):
 ##
 
 def getPrices(produto, date, idMktSource):
+    print(produto)
+    print(date)
+    print(idMktSource)
     query = "SELECT "
     query = query + "	 CASE "
     query = query + "		WHEN PRD.n0n_Str_Product  = PRD.n0n_Str_ProductNick THEN PRD.n0n_Str_ProductNick "
@@ -134,21 +139,28 @@ def getPrices(produto, date, idMktSource):
 ##
 def  addPrice(event):
     global dfglobal
+    print('df global agora hein')
+    print(dfglobal)
     o = len(dfglobal.index)
     for z in range(0,o):
         data  = str(dfglobal.iat[z,0])
+        print('data')
+        print(data)
         idmkt = str(int(dfglobal.iat[z,5]))
+        print('mkt src')
+        print(idmkt)
         prod  = str(dfglobal.iat[z,1])
+        print('prod')
+        print(prod)
         try:
             prec = getPrices(prod,data,idmkt)
             dfglobal.iat[z,6] = prec[0]
         except:
             dfglobal.iat[z,6] = np.nan
+
     
+    dfglobal['Data'] = dfglobal['Data'].dt.strftime('%d/%m/%Y')
     geratabela(event)
-
-
-
 
 
 ##
@@ -212,7 +224,7 @@ def importar(event):
             files.insert(0,arq)
         print("Cliente e Market Source validados!")
         for file in files:
-            aux = pd.read_excel(file)
+            aux = pd.read_excel(file, engine = 'openpyxl')
             padraoArquivo = verificaPadrao(aux, file)
 
             if padraoArquivo:
@@ -232,6 +244,7 @@ def importar(event):
                     dfglobal = pd.merge(dfArquivos,dfMktSrc,on = 'nomeMktSrc',how = 'left') #Tabela que vai ter preço
                     dfglobal["Preços Procurados"] = np.nan
                     del dfglobal["MktSource"]
+                    dfglobal = dfglobal[['Data','Produto','Preço','Pricing Type','nomeMktSrc','idMktSrc','Preços Procurados']]
                     print(dfglobal)
                     #print(dfglobal)
                     addPrice(event)
@@ -252,17 +265,17 @@ def geratabela(event):
     trv.heading(1, text="Data")
     trv.column(1,anchor ="center")
     trv.heading(2, text="Produto")
-    trv.column(2,anchor ="center",minwidth = 60)
+    trv.column(2,anchor ="center",minwidth = 10)
     trv.heading(3, text="Preço")
-    trv.column(3,anchor ="center",minwidth = 50)
+    trv.column(3,anchor ="center",minwidth = 20)
     trv.heading(4, text="Pricing Type")
-    trv.column(4,anchor ="center",minwidth = 100)
+    trv.column(4,anchor ="center",minwidth = 30)
     trv.heading(5, text="nomeMktSrc")
-    trv.column(5,anchor ="center",minwidth = 150)
+    trv.column(5,anchor ="center",minwidth = 20)
     trv.heading(6, text="idMktSrc")
-    trv.column(6,anchor ="center",minwidth = 60)
+    trv.column(6,anchor ="center",minwidth = 10)
     trv.heading(7, text="Preços Procurados")
-    trv.column(7,anchor ="center",minwidth = 100,width = 100)
+    trv.column(7,anchor ="center",minwidth = 10,width = 100)
     
     trv.tag_configure('bgg', background='#aafa84')
     trv.tag_configure('bgr', background='#fa8e7d')
@@ -389,7 +402,7 @@ importButton.bind("<Button-1>", importar)
 wrapperResult = LabelFrame(janela, text="Resultado")
 wrapperResult.pack(pady=10,padx=10,fill="both", expand="yes")
 
-wrapperprocess = LabelFrame(janela, text = "Em Processamento")
+wrapperprocess = LabelFrame(janela, text = "Processamento")
 wrapperprocess.pack(fill="both", expand = "yes" , padx=10,pady=10)
 
 
