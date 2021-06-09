@@ -11,8 +11,6 @@ import sys,clr
 import numpy as np
 from tkinter import messagebox
 
-from pandas.core import frame
-
 sys.path.append("C:\Program Files (x86)\Lote45\Lote45 Bridge Client")
 clr.AddReference("zlib.net")
 clr.AddReference("SocketClient")
@@ -23,6 +21,7 @@ clr.AddReference("BridgeQuery")
 clr.AddReference('System.Data')
 from Lote45 import CSqlBridgeClientTCP
 ##
+
 
 #! Definição de Funções
 mkts = ''
@@ -57,7 +56,7 @@ def clienteSelecionado(event):
             i = i + 1   
     
     if (mkts) == '':
-        #print('MktSource ainda não adicionado')
+
         answer = tk.messagebox.askquestion(title = "Seleção de Market Source",message = "Deseja selecionar um Market Source para onde não houver ? Se sim, escolha ele abaixo")
         if answer == 'no':
             mktstate = 'disabled'
@@ -74,9 +73,7 @@ def clienteSelecionado(event):
         tk.messagebox.showinfo(title = "Informe", message="Está sendo usado como Market Source: "+str(mkts))
     
     dfAux = pd.DataFrame(arrayAux,columns=['idMktSrc','nomeMktSrc'])
-    #print(dfAux)
     dfMktSrc = dfMktSrc.append(dfAux)
-    #print(dfMktSrc)
     auxMkt = dfMktSrc["nomeMktSrc"]
     auxMkt.drop(index = auxMkt.index[-1],axis=1,inplace=True)    
     auxMktArray = auxMkt.values.tolist()
@@ -90,11 +87,10 @@ def mktSelecionado(event):
     clienteSelecionado(event)
 
 ##
+#def upPrices (dataf)
+
 
 def getPrices(produto, date, idMktSource):
-    print(produto)
-    print(date)
-    print(idMktSource)
     query = "SELECT "
     query = query + "	 CASE "
     query = query + "		WHEN PRD.n0n_Str_Product  = PRD.n0n_Str_ProductNick THEN PRD.n0n_Str_ProductNick "
@@ -125,42 +121,82 @@ def getPrices(produto, date, idMktSource):
     query = query + "	ON PRD.f3n_Id_ProductCurrency = CURR.p1n_Id_Currency "
     query = query + "WHERE RESPU.n0n_Dt_ValDate = '"+date+"' AND RESPU.f2n_Id_MktSource = "+str(idMktSource)
 
-    Precos = np.array([])
-
+    Precos = []
     dtPrices = sqlBridgeClient.ResolveQuery(query)
-    #print(dtPrices)
     i = 0
+    
     for linha in dtPrices.Rows:
         preco = linha['Price']
-        Precos = np.insert(Precos, i, preco)
-
-
+        curr = linha['Currency']          #Tipo de Moeda
+        usd = linha['MKTSRCUSDBRLPARITY'] #MKTSRCUSDBRLPARITY -- Preço da paridade USD / BRL
+        eur = linha['MKTSRCEURUSDPARITY'] #Dolar/Euro
+        pclass = linha['ProductClass']    #Product Class
+        zero = linha['ZEROPARITY']    #Paridade Zero
+        mktpar = linha['MKTSRCPARITY']    #Paridade Zero
+        
+        Precos.append((preco,curr,usd,eur,pclass,zero,mktpar))
+        
     return Precos
+
 ##
 def  addPrice(event):
     global dfglobal
-    print('df global agora hein')
-    print(dfglobal)
     o = len(dfglobal.index)
     for z in range(0,o):
+        print(dfglobal)
+        dfglobal.iat[z,1].lstrip()
+        dfglobal.iat[z,3].lstrip()
+        
         data  = str(dfglobal.iat[z,0])
-        print('data')
-        print(data)
         idmkt = str(int(dfglobal.iat[z,5]))
-        print('mkt src')
-        print(idmkt)
         prod  = str(dfglobal.iat[z,1])
-        print('prod')
-        print(prod)
         try:
             prec = getPrices(prod,data,idmkt)
-            dfglobal.iat[z,6] = prec[0]
+            
+            dfglobal.iat[z,6] = prec[0][0] #Preço Procurado
+            dfglobal.iat[z,7] = prec[0][1] #Moeda
+            dfglobal.iat[z,11] = prec[0][4] #Product Class
+            dfglobal.iat[z,12] = prec[0][2] #Paridade USD/BRL
+            dfglobal.iat[z,13] = prec[0][2]*prec[0][3] #Paridade EUR/BRL
+            if prec[0][1] == 'BRL': #Se o Preço for em Real
+                dfglobal.iat[z,8] = float(prec[0][0]) #Preço em Real
+                
+                dfglobal.iat[z,9] = float((prec[0][0])) / float((prec[0][2])) #Preço em Dolar
+                
+                dfglobal.iat[z,10] = float((prec[0][0])) / (float((prec[0][2])) * float((prec[0][3]))) #Preço em Euro
+                
+            if prec[0][1] == 'USD': # Se o preço for em Dolar
+                dfglobal.iat[z,9] = float(prec[0][0]) #Preço em Dolar
+                
+                dfglobal.iat[z,8] = float((prec[0][0])) * float((prec[0][2])) #Preço em Real
+                
+                dfglobal.iat[z,10] = float((prec[0][0])) / float((prec[0][3])) #Preço em Euro
+                
+                
+                
+                
+                
+            if prec[0][1] == 'EUR': # Se o preço for em Dolar
+                dfglobal.iat[z,10] = float(prec[0][0]) #Preço em Euro
+                
+                dfglobal.iat[z,9] = float((prec[0][0])) * float((prec[0][3])) #Preço em Dolar
+                
+                dfglobal.iat[z,8] = float((prec[0][0])) * (float((prec[0][3]))*float((prec[0][2]))) #Preço em Dolar
+                
+                
         except:
-            dfglobal.iat[z,6] = np.nan
-
-    
-    dfglobal['Data'] = dfglobal['Data'].dt.strftime('%d/%m/%Y')
+            dfglobal.iat[z,6] = ""
+            dfglobal.iat[z,7] = ""
+            dfglobal.iat[z,8] = ""
+            dfglobal.iat[z,9] = ""
+            dfglobal.iat[z,10] = ""
+            dfglobal.iat[z,11] = ""
+            
+    dfglobal['Data'] = dfglobal['Data'].dt.strftime('%Y-%m-%d')
     geratabela(event)
+
+
+
 
 
 ##
@@ -224,29 +260,31 @@ def importar(event):
             files.insert(0,arq)
         print("Cliente e Market Source validados!")
         for file in files:
-            aux = pd.read_excel(file, engine = 'openpyxl')
+            aux = pd.read_excel(file)
             padraoArquivo = verificaPadrao(aux, file)
-
+            
             if padraoArquivo:
                 aux = aux.rename(columns={'MktSource': 'nomeMktSrc'})
                 df = aux[['Data','nomeMktSrc','Produto','Preço','Pricing Type']]
-                print(df)
-                print("======================")
+                
                 if (answer == 'yes'):
                     df[['nomeMktSrc']] = df[['nomeMktSrc']].fillna(value=mkts)
                 df = df.dropna()
-                print(df)
-                print('================')
+
                 tipoArquivo = verificaTipo(df)
                 if tipoArquivo:
                     dfArquivos = dfArquivos.append(df)     #Tabela sem preço
-                    print(dfArquivos)
+
                     dfglobal = pd.merge(dfArquivos,dfMktSrc,on = 'nomeMktSrc',how = 'left') #Tabela que vai ter preço
-                    dfglobal["Preços Procurados"] = np.nan
+                    dfglobal["Preços Procurados"] = ""
+                    dfglobal["Currency"] = ""
+                    dfglobal["PU Real"] = ""
+                    dfglobal["PU Dolar"] = ""
+                    dfglobal["PU Euro"] = ""
+                    dfglobal["Product Class"] = ""
+                    dfglobal["Paridade USD/BRL"] = ""
+                    dfglobal["Paridade EUR/BRL"] = ""
                     del dfglobal["MktSource"]
-                    dfglobal = dfglobal[['Data','Produto','Preço','Pricing Type','nomeMktSrc','idMktSrc','Preços Procurados']]
-                    print(dfglobal)
-                    #print(dfglobal)
                     addPrice(event)
 
 
@@ -255,41 +293,55 @@ def geratabela(event):
     global dfglobal
     global wrapperResult
     global l
-    print("=================Inter")
+    print("======= DF Global ======")
+    print(dfglobal)
     df2 = dfglobal
-    #print(dfglobal.iat[0,6])
-    #print(dfglobal.iat[0,2])
     df2_col = df2.values.tolist()
-    trv = ttk.Treeview(wrapperResult, columns =(1,2,3,4,5,6,7), show="headings",height="6")
+    print(df2_col[0][0])
+    print(df2_col[0][1])
+    trv = ttk.Treeview(wrapperResult, columns =(1,2,3,4,5,6,7,8,9,10,11,12,13,14), show="headings",height="6")
     trv.pack()
     trv.heading(1, text="Data")
     trv.column(1,anchor ="center")
     trv.heading(2, text="Produto")
-    trv.column(2,anchor ="center",minwidth = 10)
+    trv.column(2,anchor ="center",minwidth = 60)
     trv.heading(3, text="Preço")
-    trv.column(3,anchor ="center",minwidth = 20)
+    trv.column(3,anchor ="center",minwidth = 50)
     trv.heading(4, text="Pricing Type")
-    trv.column(4,anchor ="center",minwidth = 30)
+    trv.column(4,anchor ="center",minwidth = 100)
     trv.heading(5, text="nomeMktSrc")
-    trv.column(5,anchor ="center",minwidth = 20)
+    trv.column(5,anchor ="center",minwidth = 150)
     trv.heading(6, text="idMktSrc")
-    trv.column(6,anchor ="center",minwidth = 10)
+    trv.column(6,anchor ="center",minwidth = 60)
     trv.heading(7, text="Preços Procurados")
-    trv.column(7,anchor ="center",minwidth = 10,width = 100)
+    trv.column(7,anchor ="center",minwidth = 100,width = 100)
     
-    trv.tag_configure('bgg', background='#aafa84')
-    trv.tag_configure('bgr', background='#fa8e7d')
+    trv.heading(8, text="Moeda")
+    trv.column(8,anchor ="center",minwidth = 100,width = 100)
+    trv.heading(9, text="PU Real")
+    trv.column(9,anchor ="center",minwidth = 100,width = 100)
+    trv.heading(10, text="PU Dolar")
+    trv.column(10,anchor ="center",minwidth = 100,width = 100)
+    trv.heading(11, text="PU Euro")
+    trv.column(11,anchor ="center",minwidth = 100,width = 100)
+    trv.heading(12, text="Product Class")
+    trv.column(12,anchor ="center",minwidth = 100,width = 100)
+    
+    
+    trv.heading(13, text="Paridade USD/BRL")
+    trv.column(13,anchor ="center",minwidth = 100,width = 100)
+    trv.heading(14, text="Paridade EUR/BRL")
+    trv.column(14,anchor ="center",minwidth = 100,width = 100)
+    
+    trv.tag_configure('bgg', background='#aafa84') #verde
+    trv.tag_configure('bgr', background='#fa8e7d') #vermelho
 
-    
     for dados in df2_col:
-        print(dados[2])
-        print(dados[6])
-        if (dados[2]==dados[6]):
+        if (dados[2]==dados[8]) or (dados[2]==dados[9]) or (dados[2]==dados[10]):
             trv.insert('',tk.END,values=dados,tags=('bgg'))
         else:
             trv.insert('',tk.END,values=dados,tags=('bgr'))
-    #trv.insert('', 'end', text='Item 4',values= "Teste", tags=('fg', 'bg'))
-    #trv.tag_configure(tagname, background=str)
+
 ##
 l = locals()
 ##
@@ -354,7 +406,10 @@ sqlBridgeClient.CustomBridgeServer = "13.84.148.159"
 
 janela = Tk()
 janela.title("Sistema Check Prices")
-janela.geometry("550x600")
+w = janela.winfo_screenwidth()
+h = janela.winfo_screenheight()
+janela.geometry("%dx%d" % (w,h)) #Antes era 800x600
+#janela.attributes('-fullscreen',True)
 
 arquivos = []
 dfArquivos = pd.DataFrame(columns = ['Data','MktSource','Produto','Preço','Pricing Type'])
@@ -402,14 +457,13 @@ importButton.bind("<Button-1>", importar)
 wrapperResult = LabelFrame(janela, text="Resultado")
 wrapperResult.pack(pady=10,padx=10,fill="both", expand="yes")
 
-wrapperprocess = LabelFrame(janela, text = "Processamento")
+wrapperprocess = LabelFrame(janela, text = "Em Processamento")
 wrapperprocess.pack(fill="both", expand = "yes" , padx=10,pady=10)
 
 
 ##!
 
 ##!
-
 
 
 janela.mainloop()
