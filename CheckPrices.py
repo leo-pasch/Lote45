@@ -12,6 +12,11 @@
 import pandas as pd
 import sys,clr
 import numpy as np
+from tkinter import Tk
+from tkinter import *
+from tkinter import ttk
+import tkinter as tk
+from tkinter.filedialog import askopenfilenames
 
 from pandas.core import frame
 
@@ -27,13 +32,73 @@ from checkableCombobox import CheckableComboBox
 from Lote45 import CSqlBridgeClientTCP
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QFileDialog
+
 sqlBridgeClient = CSqlBridgeClientTCP()
 sqlBridgeClient.CustomBridgeServer = "13.84.148.159"
 
+##
 arquivos = []
+
 dfArquivos = pd.DataFrame(columns = ['Data','MktSource','Produto','Preço','Pricing Type'])
 dfClientes = pd.DataFrame(columns=['idCliente','nomeCliente'])
 dfMktSrc = pd.DataFrame(columns=['idMktSrc','nomeMktSrc'])
+
+
+
+def getPrices(produto, date, idMktSource):
+    query = "SELECT "
+    query = query + "	 CASE "
+    query = query + "		WHEN PRD.n0n_Str_Product  = PRD.n0n_Str_ProductNick THEN PRD.n0n_Str_ProductNick "
+    query = query + "		WHEN PRD.f1n_Id_ProductClass IN (52,50,33,704) THEN PRD.n0n_Str_ProductNick "
+    query = query + "		ELSE PRD.n0n_Str_Product "
+    query = query + "	END AS Product, "
+    query = query + "	RESPU.n0n_Vl_PU AS Price, "
+    query = query + "	RESPU.n0n_Vl_TradePU AS TradePU, "
+    query = query + "	RESPUCOMP.n0n_Vl_PU AS PUCompany, "
+    query = query + "	RESPUCOMP.f1n_Id_TradingDesk AS idTradindesk, "
+    query = query + "	CURR.n0n_Str_Currency AS Currency, "
+    query = query + "	CLASS.n0n_Str_ProductClass AS ProductClass, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,RESPU.f2n_Id_MktSource,CURR.p1n_Id_Currency,220) AS MKTSRCPARITY, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,0,CURR.p1n_Id_Currency,220) AS ZEROPARITY, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,RESPU.f2n_Id_MktSource,790,220) AS MKTSRCUSDBRLPARITY, "
+    query = query + "	[LOTIS_LOTE45].[dbo].[f_GetParity](RESPU.n0n_Dt_ValDate,RESPU.f2n_Id_MktSource,220,978) AS MKTSRCEURUSDPARITY "
+    query = query + "FROM [LOTIS_RESMASTER].[dbo].[Res_PUProduct] RESPU (NOLOCK) "
+    query = query + "INNER JOIN [LOTIS_RESMASTER].[dbo].[Res_PUCompanyProduct] RESPUCOMP (NOLOCK) "
+    query = query + "	ON RESPU.n0n_Str_Product = RESPUCOMP.n0n_Str_Product "
+    query = query + "	AND RESPU.n0n_Dt_ValDate = RESPUCOMP.n0n_Dt_ValDate "
+    query = query + "	AND  RESPU.f2n_Id_MktSource = RESPUCOMP.f3n_Id_MktSource " 
+    query = query + "INNER JOIN [APM].[dbo].[Prd_Products] PRD (NOLOCK) "
+    query = query + "	ON RESPU.n0n_Str_Product = PRD.n0n_Str_Product "
+    query = query + "	AND (PRD.n0n_Str_Product = '"+produto+"' OR  PRD.n0n_Str_ProductNick ='"+produto+"' ) " 
+    query = query + "INNER JOIN [APM].[dbo].[Prd_ProductClass] CLASS (NOLOCK) "
+    query = query + "	ON CLASS.p1n_Id_ProductClass = PRD.f1n_Id_ProductClass " 
+    query = query + "INNER JOIN [GLOBAL].[dbo].[Glb_Currency] AS CURR (NOLOCK) "
+    query = query + "	ON PRD.f3n_Id_ProductCurrency = CURR.p1n_Id_Currency "
+    query = query + "WHERE RESPU.n0n_Dt_ValDate = '"+date+"' AND RESPU.f2n_Id_MktSource = "+str(idMktSource)
+
+    Precos = []
+    dtPrices = sqlBridgeClient.ResolveQuery(query)
+    i = 0
+    
+    for linha in dtPrices.Rows:
+        preco = linha['Price']
+        curr = linha['Currency']          #Tipo de Moeda
+        usd = linha['MKTSRCUSDBRLPARITY'] #MKTSRCUSDBRLPARITY -- Preço da paridade USD / BRL
+        eur = linha['MKTSRCEURUSDPARITY'] #Dolar/Euro
+        pclass = linha['ProductClass']    #Product Class
+        zero = linha['ZEROPARITY']    #Paridade Zero
+        mktpar = linha['MKTSRCPARITY']    #Paridade Zero
+        
+        Precos.append((preco,curr,usd,eur,pclass,zero,mktpar))
+        
+    return Precos
+
+
+
+
+
+
+
 
 def getClientes(self):
     global dfClientes
@@ -87,6 +152,14 @@ def getMktSrc(self,nomeCliente):
     auxMkt.drop(index = auxMkt.index[-1],axis=1,inplace=True)
     return True
 
+
+
+
+
+
+
+
+
 class Ui_SistemaChekPrices(object):
     def setupUi(self, SistemaChekPrices):
         SistemaChekPrices.setObjectName("SistemaChekPrices")
@@ -122,16 +195,17 @@ class Ui_SistemaChekPrices(object):
         font.setFamily("Verdana")
         self.label_3.setFont(font)
         self.label_3.setObjectName("label_3")
-        self.clienteBox = QtWidgets.QComboBox(self.frameInformacoes)
+        self.clienteBox = QtWidgets.QComboBox(self.frameInformacoes) #!
         self.clienteBox.setGeometry(QtCore.QRect(120, 20, 301, 21))
         self.clienteBox.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.clienteBox.setObjectName("clienteBox")
-        self.mkrSrcBox = CheckableComboBox(self.frameInformacoes)
+        self.clienteBox.setCurrentIndex(5)
+        self.mkrSrcBox = CheckableComboBox(self.frameInformacoes)     #!
         self.mkrSrcBox.setGeometry(QtCore.QRect(120, 50, 301, 21))
         self.mkrSrcBox.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.mkrSrcBox.setFrame(True)
         self.mkrSrcBox.setObjectName("mkrSrcBox")
-        self.arqBox = QtWidgets.QLineEdit(self.frameInformacoes)
+        self.arqBox = QtWidgets.QLineEdit(self.frameInformacoes) #!
         self.arqBox.setGeometry(QtCore.QRect(120, 80, 461, 20))
         self.arqBox.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.arqBox.setObjectName("arqBox")
@@ -215,23 +289,80 @@ class Ui_SistemaChekPrices(object):
 
         self.clienteBox.currentIndexChanged.connect(self.clientesSelected)
         self.pushButton.clicked.connect(self.procurarClicked)
+        self.pushButton_2.clicked.connect(self.importarClicked)
 
         self.retranslateUi(SistemaChekPrices)
         QtCore.QMetaObject.connectSlotsByName(SistemaChekPrices)  
-
+        
     def clientesSelected(self):
         auxCliente = self.clienteBox.currentText()
         auxMkt = getMktSrc(self,auxCliente)
+        
+    def anula(self):
+        print('s')
+
 
     def procurarClicked(self):
-        print('Apertou')
-        self.openDialogBox()
-    
-    def openDialogBox(self):
-        print("Aqui")
-        file = QFileDialog.getOpenFileName()
-        path = file[0]
-        print(path)
+        print('Apertou Procurar')
+        self.procurar()
+    def procurar(self):
+        Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
+        files = askopenfilenames() # show an "Open" dialog box and return the path to the selected file
+        #arquivo = StringVar()
+        i = 0
+        self.str_Arquivos = ""
+        #print(files)
+        for file in files:
+            #arquivos.insert(i, file)
+            if i == 0 :
+                self.str_Arquivos = str(file)
+            else:
+                self.str_Arquivos = self.str_Arquivos + "," + str(file)
+            i+=1
+            print(self.str_Arquivos)
+            self.arqBox.setText(self.str_Arquivos)
+            
+    def importarClicked(self):
+        print('Apertou Importar')
+        self.importar()
+    def importar(self):
+        print('Importando...')
+        print(self.str_Arquivos)
+        print(self.mkrSrcBox.currentText())
+        print(self.clienteBox.currentText())
+        
+        arq = self.str_Arquivos
+        files = []
+        if ',' in arq:
+            files = arq.split(',')
+        else:
+            files.insert(0,arq)
+        for file in files:
+            aux = pd.read_excel(file)
+            #padraoArquivo = verificaPadrao(aux, file)
+            padraoArquivo = True
+            answer = 'yes'
+            if padraoArquivo:
+                    aux = aux.rename(columns={'MktSource': 'nomeMktSrc'})
+                    df = aux[['Data','nomeMktSrc','Produto','Preço','Pricing Type']]
+                    #if (answer == 'yes'):
+                    #    df[['nomeMktSrc']] = df[['nomeMktSrc']].fillna(value=mkts)
+                    df = df.dropna()
+                    print(df)
+                    #tipoArquivo = verificaTipo(df)
+                    #if tipoArquivo:
+                    #    dfArquivos = dfArquivos.append(df)     #Tabela sem preço
+                    #    dfglobal = pd.merge(dfArquivos,dfMktSrc,on = 'nomeMktSrc',how = 'left') #Tabela que vai ter preço
+                    #    dfglobal["Preços Procurados"] = ""
+                    #    dfglobal["Currency"] = ""
+                    #    dfglobal["PU Real"] = ""
+                    #    dfglobal["PU Dolar"] = ""
+                    #    dfglobal["PU Euro"] = ""
+                    #    dfglobal["Product Class"] = ""
+                    #    dfglobal["Paridade USD/BRL"] = ""
+                    #    dfglobal["Paridade EUR/BRL"] = ""
+                    #    del dfglobal["MktSource"]
+
 
     def retranslateUi(self, SistemaChekPrices):
         _translate = QtCore.QCoreApplication.translate
@@ -271,7 +402,7 @@ class Ui_SistemaChekPrices(object):
         item = self.resultTable.horizontalHeaderItem(12)
         item.setText(_translate("SistemaChekPrices", "EUR/BRL Parity"))
         self.groupBox_2.setTitle(_translate("SistemaChekPrices", "Processamento"))
-
+        
 
 if __name__ == "__main__":
     import sys
