@@ -367,22 +367,22 @@ class Ui_SistemaChekPrices(object):
                     else : self.resultTable.item(l, c).setBackground(QtGui.QColor(250,142,125))
     def LoadClicked(self):
         print('Clickou')
-        #self.export()
+        self.export()
         
     def AtualizarClicked(self):
         print('Clickou')
     
-    #def export(self):
-    #    columnHeaders = []
-    #    # create column header list
-    #    for j in range(self.resultTable.model().columnCount()):
-    #        columnHeaders.append(self.resultTable.horizontalHeaderItem(j).text())
-    #    df = pd.DataFrame(columns=columnHeaders)
-    #    # create dataframe object recordset
-    #    for row in range(self.resultTable.rowCount()):
-    #        for col in range(self.resultTable.columnCount()):
-#
-    #    #print(df)
+    def export(self):
+        columnHeaders = []
+        # create column header list
+        for j in range(self.resultTable.model().columnCount()):
+            columnHeaders.append(self.resultTable.horizontalHeaderItem(j).text())
+        df = pd.DataFrame(columns=columnHeaders)
+        # create dataframe object recordset
+        for row in range(self.resultTable.rowCount()):
+            for col in range(self.resultTable.columnCount()):
+                df.at[row, columnHeaders[col]] = self.resultTable.item(row, col).text()
+        print(df)
     
     
         
