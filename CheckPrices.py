@@ -17,7 +17,7 @@ from tkinter import *
 from tkinter import ttk
 import tkinter as tk
 from tkinter.filedialog import askopenfilenames
-
+from tkinter import messagebox
 from pandas.core import frame
 
 sys.path.append("C:\Program Files (x86)\Lote45\Lote45 Bridge Client")
@@ -42,7 +42,7 @@ arquivos = []
 dfArquivos = pd.DataFrame(columns = ['Data','MktSource','Produto','Preço','Pricing Type'])
 dfClientes = pd.DataFrame(columns=['idCliente','nomeCliente'])
 dfMktSrc = pd.DataFrame(columns=['idMktSrc','nomeMktSrc'])
-
+dfglobal = pd.DataFrame()
 
 
 
@@ -112,7 +112,7 @@ def getMktSrc(self,nomeCliente):
 class Ui_SistemaChekPrices(object):
     def setupUi(self, SistemaChekPrices):
         SistemaChekPrices.setObjectName("SistemaChekPrices")
-        SistemaChekPrices.resize(800, 600)
+        SistemaChekPrices.resize(800, 603)
         font = QtGui.QFont()
         font.setFamily("Verdana")
         SistemaChekPrices.setFont(font)
@@ -148,7 +148,7 @@ class Ui_SistemaChekPrices(object):
         self.clienteBox.setGeometry(QtCore.QRect(120, 20, 301, 21))
         self.clienteBox.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.clienteBox.setObjectName("clienteBox")
-        self.clienteBox.setCurrentIndex(5)
+        self.clienteBox.setEditable(True)
         self.mkrSrcBox = CheckableComboBox(self.frameInformacoes)     #!
         self.mkrSrcBox.setGeometry(QtCore.QRect(120, 50, 301, 21))
         self.mkrSrcBox.setStyleSheet("background-color: rgb(255, 255, 255);")
@@ -171,7 +171,7 @@ class Ui_SistemaChekPrices(object):
         self.pushButton_2.setFont(font)
         self.pushButton_2.setObjectName("pushButton_2")
         self.groupBox = QtWidgets.QGroupBox(self.centralwidget)
-        self.groupBox.setGeometry(QtCore.QRect(10, 160, 771, 241))
+        self.groupBox.setGeometry(QtCore.QRect(10, 160, 771, 271))
         font = QtGui.QFont()
         font.setFamily("Verdana")
         self.groupBox.setFont(font)
@@ -188,8 +188,8 @@ class Ui_SistemaChekPrices(object):
         self.resultTable.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectColumns)
         self.resultTable.setGridStyle(QtCore.Qt.SolidLine)
         self.resultTable.setCornerButtonEnabled(False)
-        self.resultTable.setRowCount(1)
-        self.resultTable.setColumnCount(13)
+        #self.resultTable.setRowCount(100)
+        self.resultTable.setColumnCount(14)
         self.resultTable.setObjectName("resultTable")
         item = QtWidgets.QTableWidgetItem()
         self.resultTable.setHorizontalHeaderItem(0, item)
@@ -217,15 +217,33 @@ class Ui_SistemaChekPrices(object):
         self.resultTable.setHorizontalHeaderItem(11, item)
         item = QtWidgets.QTableWidgetItem()
         self.resultTable.setHorizontalHeaderItem(12, item)
+        item = QtWidgets.QTableWidgetItem()
+        self.resultTable.setHorizontalHeaderItem(13, item)
+        
+        self.pushButton_3 = QtWidgets.QPushButton(self.groupBox)
+        self.pushButton_3.setGeometry(QtCore.QRect(690, 240, 75, 23))
+        font = QtGui.QFont()
+        font.setFamily("Verdana")
+        self.pushButton_3.setFont(font)
+        self.pushButton_3.setObjectName("pushButton_3")
+        
+        self.pushButton_4 = QtWidgets.QPushButton(self.groupBox)
+        self.pushButton_4.setGeometry(QtCore.QRect(590, 240, 75, 23))
+        font = QtGui.QFont()
+        font.setFamily("Verdana")
+        self.pushButton_4.setFont(font)
+        self.pushButton_4.setObjectName("pushButton_4")
+        
+        
         self.resultTable.horizontalHeader().setCascadingSectionResizes(False)
         self.groupBox_2 = QtWidgets.QGroupBox(self.centralwidget)
-        self.groupBox_2.setGeometry(QtCore.QRect(10, 410, 771, 181))
+        self.groupBox_2.setGeometry(QtCore.QRect(10, 440, 771, 161))
         font = QtGui.QFont()
         font.setFamily("Verdana")
         self.groupBox_2.setFont(font)
         self.groupBox_2.setObjectName("groupBox_2")
         self.processTable = QtWidgets.QTableWidget(self.groupBox_2)
-        self.processTable.setGeometry(QtCore.QRect(10, 20, 751, 141))
+        self.processTable.setGeometry(QtCore.QRect(10, 20, 751, 121))
         self.processTable.setObjectName("processTable")
         self.processTable.setColumnCount(0)
         self.processTable.setRowCount(0)
@@ -237,8 +255,11 @@ class Ui_SistemaChekPrices(object):
         auxCli = getClientes(self)
 
         self.clienteBox.currentIndexChanged.connect(self.clientesSelected)
+        self.clienteBox.setCurrentText('')
         self.pushButton.clicked.connect(self.procurarClicked)
         self.pushButton_2.clicked.connect(self.importarClicked)
+        self.pushButton_3.clicked.connect(self.LoadClicked)
+        self.pushButton_4.clicked.connect(self.AtualizarClicked)
 
         self.retranslateUi(SistemaChekPrices)
         QtCore.QMetaObject.connectSlotsByName(SistemaChekPrices)  
@@ -247,72 +268,126 @@ class Ui_SistemaChekPrices(object):
         auxCliente = self.clienteBox.currentText()
         auxMkt = getMktSrc(self,auxCliente)
         
-    def anula(self):
-        print('s')
-
 
     def procurarClicked(self):
         print('Apertou Procurar')
         self.procurar()
     def procurar(self):
-        Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
-        files = askopenfilenames() # show an "Open" dialog box and return the path to the selected file
-        #arquivo = StringVar()
+        #? Função que executa a procura do arquivo e salva o nome na variavel self.str_Arquivos
+        #! Foi usado o Tkinter, pois estava havendo conflitos com a ferramente de procura do pyQT5
+        
+        Tk().withdraw() 
+        files = askopenfilenames()
         i = 0
         self.str_Arquivos = ""
-        #print(files)
         for file in files:
-            #arquivos.insert(i, file)
             if i == 0 :
                 self.str_Arquivos = str(file)
             else:
                 self.str_Arquivos = self.str_Arquivos + "," + str(file)
             i+=1
-            print(self.str_Arquivos)
-            self.arqBox.setText(self.str_Arquivos)
+            self.arqBox.setText(self.str_Arquivos)         #? Nessa parte aqui ele adiciona o caminha ao box em branco
             
     def importarClicked(self):
         print('Apertou Importar')
         self.importar()
-    def importar(self):
-        print('Importando...')
-        print(self.str_Arquivos)
-        print(self.mkrSrcBox.currentText())
-        print(self.clienteBox.currentText())
         
+    def importar(self):
+        ### Função Executado após o click no botão de Importar.
+        #? Tem como função primeiramente verificar se tudo foi preenchido, e posteriormente vai importar do Excel
+        print('Importando...')
         arq = self.str_Arquivos
         files = []
-        if ',' in arq:
-            files = arq.split(',')
-        else:
-            files.insert(0,arq)
-        for file in files:
-            aux = pd.read_excel(file)
-            #padraoArquivo = verificaPadrao(aux, file)
-            padraoArquivo = True
-            answer = 'yes'
-            if padraoArquivo:
-                    aux = aux.rename(columns={'MktSource': 'nomeMktSrc'})
-                    df = aux[['Data','nomeMktSrc','Produto','Preço','Pricing Type']]
-                    #if (answer == 'yes'):
-                    #    df[['nomeMktSrc']] = df[['nomeMktSrc']].fillna(value=mkts)
-                    df = df.dropna()
-                    print(df)
-                    #tipoArquivo = verificaTipo(df)
-                    #if tipoArquivo:
-                    #    dfArquivos = dfArquivos.append(df)     #Tabela sem preço
-                    #    dfglobal = pd.merge(dfArquivos,dfMktSrc,on = 'nomeMktSrc',how = 'left') #Tabela que vai ter preço
-                    #    dfglobal["Preços Procurados"] = ""
-                    #    dfglobal["Currency"] = ""
-                    #    dfglobal["PU Real"] = ""
-                    #    dfglobal["PU Dolar"] = ""
-                    #    dfglobal["PU Euro"] = ""
-                    #    dfglobal["Product Class"] = ""
-                    #    dfglobal["Paridade USD/BRL"] = ""
-                    #    dfglobal["Paridade EUR/BRL"] = ""
-                    #    del dfglobal["MktSource"]
+        global dfArquivos,dfMktSrc,dfglobal
 
+        if self.clienteBox.currentText() == '' :           #? Verifica se foi preenchido a Box de Cliente
+            tk.messagebox.showwarning('Alerta', 'Favor preencher o Cliente!')
+            print("Favor preencher o Cliente!")      
+        elif self.mkrSrcBox.currentText() == "":# and answer != "no" : #? Verifica se foi preenchido a Box de MrktSource
+            tk.messagebox.showwarning('Alerta', 'Favor preencher o Market Source!')
+            print("Favor preencher o Market Source!")
+        elif not arq:
+            tk.messagebox.showwarning('Alerta', 'Favor selecionar o arquivo!')
+            print("Favor selecionar o arquivo!")     
+            
+        else:    
+            if ',' in arq:
+                files = arq.split(',')
+            else:
+                files.insert(0,arq)
+            for file in files:
+                aux = pd.read_excel(file)
+                #padraoArquivo = verificaPadrao(aux, file)     #? PadrãoArquivo serve para verificava se o arquivo está no padrão, a versão dessa função existe na Lote45_v4
+                padraoArquivo = True   # TODO: Como não tenho padrãoArquivo funcionando estou colocando como True para funcionar
+                answer = 'yes'         # TODO: Answer usada, ainda 
+                if padraoArquivo:
+                        aux = aux.rename(columns={'MktSource': 'nomeMktSrc'})
+                        df = aux[['Data','nomeMktSrc','Produto','Preço','Pricing Type']]
+                        mkts=self.mkrSrcBox.currentText().split('- ')[1]
+                        
+                        #! Se o meu cliente optar por deixar algum Mkrt Source em vazio
+                        #! isso aqui vai substituir o vazio pelo selecionado no combobox
+                        if (answer == 'yes'): 
+                            df[['nomeMktSrc']] = df[['nomeMktSrc']].fillna(value=mkts) 
+                        
+                        df = df.dropna()
+                        #tipoArquivo = verificaTipo(df)   #Antiga função que verificava os tipos, (Lote45_v4)
+                        #if tipoArquivo:
+                        dfArquivos = dfArquivos.append(df)     #Tabela sem preço
+                        dfglobal = pd.merge(dfArquivos,dfMktSrc,on = 'nomeMktSrc',how = 'left') #Tabela que vai ter preço
+                        dfglobal["Preços Procurados"] = ""
+                        dfglobal["Currency"] = ""                        
+                        dfglobal["PU Real"] = ""
+                        dfglobal["PU Dolar"] = ""
+                        dfglobal["PU Euro"] = ""
+                        dfglobal["Product Class"] = ""
+                        dfglobal["Paridade USD/BRL"] = ""
+                        dfglobal["Paridade EUR/BRL"] = ""
+                        dfglobal['Data'] = dfglobal['Data'].dt.strftime('%Y-%m-%d')
+                        del dfglobal["MktSource"]
+                        print(dfglobal)
+                        self.setValues()
+                        
 
+    
+    def setValues (self):    #setItem(row, column, item)
+        global dfglobal 
+        dfglobal = dfglobal[["Data", "Produto","Preço","Product Class","nomeMktSrc","idMktSrc","Pricing Type","Preços Procurados","Currency","PU Real","PU Dolar","PU Euro","Paridade USD/BRL","Paridade EUR/BRL"]]
+        self.resultTable.setRowCount(dfglobal.shape[0])
+        row_count = dfglobal.shape[0] #Número de linhas
+        col_count = dfglobal.shape[1] #Número de colunas
+        for l in range (0,row_count): #Linha
+            for c in range (0,14): #Coluna
+                self.resultTable.setItem(l,c,QtWidgets.QTableWidgetItem(str(dfglobal.iat[l,c])))
+                
+                # TODO: Vai ter que ser alterada a lógica de colunas quando mudar, posição errada
+                if  c == 2 : #? 2 é a coluna Desired Price
+                    #? Se o Desired Price for igual Current Price pintar de verde o Desired Price,senão vermelho
+                    if dfglobal.iat[l,c] == dfglobal.iat[l,7]: self.resultTable.item(l, c).setBackground(QtGui.QColor(170,250,132))
+                    else : self.resultTable.item(l, c).setBackground(QtGui.QColor(250,142,125))
+    def LoadClicked(self):
+        print('Clickou')
+        #self.export()
+        
+    def AtualizarClicked(self):
+        print('Clickou')
+    
+    #def export(self):
+    #    columnHeaders = []
+    #    # create column header list
+    #    for j in range(self.resultTable.model().columnCount()):
+    #        columnHeaders.append(self.resultTable.horizontalHeaderItem(j).text())
+    #    df = pd.DataFrame(columns=columnHeaders)
+    #    # create dataframe object recordset
+    #    for row in range(self.resultTable.rowCount()):
+    #        for col in range(self.resultTable.columnCount()):
+#
+    #    #print(df)
+    
+    
+        
+        
+        
     def retranslateUi(self, SistemaChekPrices):
         _translate = QtCore.QCoreApplication.translate
         SistemaChekPrices.setWindowTitle(_translate("SistemaChekPrices", "Sistema Check Prices"))
@@ -335,21 +410,25 @@ class Ui_SistemaChekPrices(object):
         item = self.resultTable.horizontalHeaderItem(4)
         item.setText(_translate("SistemaChekPrices", "Market Source"))
         item = self.resultTable.horizontalHeaderItem(5)
-        item.setText(_translate("SistemaChekPrices", "Product Class"))
+        item.setText(_translate("SistemaChekPrices", "Market Source ID"))
         item = self.resultTable.horizontalHeaderItem(6)
-        item.setText(_translate("SistemaChekPrices", "Current Price"))
+        item.setText(_translate("SistemaChekPrices", "Product Class"))
         item = self.resultTable.horizontalHeaderItem(7)
-        item.setText(_translate("SistemaChekPrices", "Currency"))
+        item.setText(_translate("SistemaChekPrices", "Current Price"))
         item = self.resultTable.horizontalHeaderItem(8)
-        item.setText(_translate("SistemaChekPrices", "New Column"))
+        item.setText(_translate("SistemaChekPrices", "Currency"))
         item = self.resultTable.horizontalHeaderItem(9)
-        item.setText(_translate("SistemaChekPrices", "PU USD"))
+        item.setText(_translate("SistemaChekPrices", "PU BRL"))
         item = self.resultTable.horizontalHeaderItem(10)
-        item.setText(_translate("SistemaChekPrices", "PU EUR"))
+        item.setText(_translate("SistemaChekPrices", "PU USD"))
         item = self.resultTable.horizontalHeaderItem(11)
-        item.setText(_translate("SistemaChekPrices", "USD/BRL Parity"))
+        item.setText(_translate("SistemaChekPrices", "PU EUR"))
         item = self.resultTable.horizontalHeaderItem(12)
+        item.setText(_translate("SistemaChekPrices", "USD/BRL Parity"))
+        item = self.resultTable.horizontalHeaderItem(13)
         item.setText(_translate("SistemaChekPrices", "EUR/BRL Parity"))
+        self.pushButton_3.setText(_translate("SistemaChekPrices", "Load"))
+        self.pushButton_4.setText(_translate("SistemaChekPrices", "Atualizar"))
         self.groupBox_2.setTitle(_translate("SistemaChekPrices", "Processamento"))
         
 
